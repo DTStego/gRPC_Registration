@@ -1,0 +1,66 @@
+syntax = "proto3";
+option java_package = "edu.sjsu.cs158a.hello";
+
+package hello;
+
+service AddExample {
+  rpc add(AddExampleRequest) returns (AddExampleResponse);
+}
+
+message AddExampleRequest {
+    int32 a = 1;
+    int32 b = 2;
+}
+
+message AddExampleResponse {
+    string result = 1;
+}
+
+service Hello {
+    rpc requestCode(CodeRequest) returns (CodeResponse);
+    rpc register(RegisterRequest) returns (RegisterResponse);
+    rpc list(ListRequest) returns (ListResponse);
+}
+
+message CodeRequest {
+    // the course being registered for CS158A or CS158B
+    string course = 1;
+    // the student id
+    int32 ssid = 2;
+}
+
+message CodeResponse {
+    // 0 = add code returned
+    // 1 = invalid course
+    // 2 = invalid id
+    int32 rc = 1;
+    // a random code that is used to register for the class
+    int32 addcode = 2;
+}
+
+message RegisterRequest {
+    // add code from requestCode()
+    int32 addCode = 1;
+    // ssid (must be the some one used to request the code)
+    int32 ssid = 2;
+    // student name
+    string name = 3;
+}
+
+message RegisterResponse {
+    // 0 = registration successful
+    // 1 = invalid code
+    // 2 = code does not match id
+    int32 rc = 1;
+}
+
+message ListRequest {
+    string course = 1;
+}
+
+message ListResponse {
+    // 0 = success
+    // 1 = invalid course
+    int32 rc = 1;
+    repeated RegisterRequest registerations = 2;
+}
