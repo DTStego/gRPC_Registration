@@ -31,8 +31,14 @@ public class Main {
             @Parameters(paramLabel = "b") int b) {
         try {
             ManagedChannel channel = ManagedChannelBuilder.forTarget(hostPort).usePlaintext().build();
+
+            // Represents a remote object.
             var stub = AddExampleGrpc.newBlockingStub(channel);
+
+            // Actual agreed upon object.
             var request = Messages.AddExampleRequest.newBuilder().setA(a).setB(b).build();
+
+            // Add the agreed information to the stub.
             var rsp = stub.add(request);
             System.out.println(rsp.getResult());
         } catch (StatusRuntimeException e) {
@@ -45,14 +51,20 @@ public class Main {
     int server(@Parameters(paramLabel = "port") int port) throws InterruptedException {
         class AddExampleImpl extends AddExampleGrpc.AddExampleImplBase {
 
+            int total = 0;
             @Override
             public void add(Messages.AddExampleRequest request,
                             StreamObserver<Messages.AddExampleResponse> responseObserver) {
                 var a = request.getA();
                 var b = request.getB();
                 var sum = a + b;
+                
+                synchronized (this)
+                {
+                    total += sum;
+                }
                 var response = Messages.AddExampleResponse.newBuilder()
-                        .setResult(MessageFormat.format("{0} + {1} = {2}", a, b, sum))
+                        .setResult(MessageFormat.format("{0} + {1} = {2} total {3}", a, b, sum, total))
                         .build();
                 responseObserver.onNext(response);
                 responseObserver.onCompleted();
