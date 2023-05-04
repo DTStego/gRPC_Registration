@@ -19,13 +19,11 @@ import picocli.CommandLine.Parameters;
 
 import java.io.IOException;
 import java.text.MessageFormat;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
+import java.util.*;
 
 @Command
-public class Main {
+public class Main
+{
     @Command
     void register(@Parameters(paramLabel = "hostPort") String hostPort,
                   @Parameters(paramLabel = "className") String courseName,
@@ -34,14 +32,13 @@ public class Main {
     {
         /* Request a code using requestCode(String course, int studentID)
          * Code Response -
-         *    RC: 0 = add code received, 1 = Invalid course, 2 = Invalid ID
-         *    Add Code: int
+         *    int RC: 0 = add code received, 1 = Invalid course, 2 = Invalid ID
+         *    int addCode
          *
          * Use register(int addCode, int studentID, String name)
-         * Registration response
-         *    RC: 0 = Success, 1 = Invalid Code, 2 = Code does not match ID
+         * Registration response -
+         *    int RC: 0 = Success, 1 = Invalid Code, 2 = Code does not match ID
          */
-
         try
         {
             // Requesting AddCode Section
@@ -82,6 +79,40 @@ public class Main {
 
             // OPTIONAL
             // channel.shutdown();
+        }
+        catch (StatusRuntimeException e)
+        {
+            System.out.println("problem communicating with " + hostPort);
+        }
+    }
+
+    @Command
+    void listStudents(@Parameters(paramLabel = "hostPort") String hostPort,
+                      @Parameters(paramLabel = "className") String courseName)
+    {
+        /*
+         * List the students in a specific class (CS158A/CS158B).
+         * Sort students in ascending order based on ID.
+         *
+         * Use list(String className)
+         * ListResponse -
+         *     int RC: 0 = success, 1 = invalid course
+         *     RegisterRequest (List containing student info)
+         */
+        try
+        {
+            ManagedChannel channel = ManagedChannelBuilder.forTarget(hostPort).usePlaintext().build();
+            var stub = HelloGrpc.newBlockingStub(channel);
+
+            // Request the list and sort it by ascending order based on the studentID.
+            var listResponse = stub.list(Messages.ListRequest.newBuilder().setCourse(courseName).build());
+            List<RegisterRequest> studentList = listResponse.getRegisterationsList();
+            studentList.sort(Comparator.comparingInt(RegisterRequest::getSsid));
+
+            for (RegisterRequest student : studentList)
+            {
+                System.out.println(student.getAddCode() + " " + student.getSsid() + " " + student.getName());
+            }
         }
         catch (StatusRuntimeException e)
         {
