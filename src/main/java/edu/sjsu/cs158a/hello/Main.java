@@ -20,6 +20,7 @@ import picocli.CommandLine.Parameters;
 import java.io.IOException;
 import java.text.MessageFormat;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Command
 public class Main
@@ -121,7 +122,87 @@ public class Main
     }
 
     @Command
-    void server(@Parameters(paramLabel = "port") int port) throws InterruptedException {
+    void server(@Parameters(paramLabel = "port") int port) throws InterruptedException
+    {
+        class HelloImpl extends HelloGrpc.HelloImplBase
+        {
+            // Ties a student (in the form of a RegisterRequest) with a course (String).
+            // List of students that have requested an addCode but haven't been registered.
+            HashMap<RegisterRequest, String> draftStudentList = new HashMap<>();
+            // Atomic because no student can have the same addCode.
+            AtomicInteger addCodeCounter = new AtomicInteger(1);
+
+            // List of successfully registered students (in the form of a RegisterRequest).
+            // <SSID, Student> format. Cannot have multiple entries with the same SSID key.
+            // A student cannot concurrently enroll in both CS158A & CS158B.
+            HashMap<Integer, RegisterRequest> registeredStudentList = new HashMap<>();
+
+            @Override
+            public void requestCode(CodeRequest request, StreamObserver<CodeResponse> responseObserver)
+            {
+                String course = request.getCourse();
+                int SSID = request.getSsid();
+
+                // Check if course is not valid.
+                if (!course.equalsIgnoreCase("CS158A") && !course.equalsIgnoreCase("CS158B"))
+                {
+                    var response = Messages.CodeResponse.newBuilder().setRc(1).build();
+                    responseObserver.onNext(response);
+                    responseObserver.onCompleted();
+                    return;
+                }
+
+                // Validate ID: Only valid if (100,000 <= ID < 90,000,000)
+                if (SSID < 100_000 || SSID >= 90_000_000)
+                {
+                    var response = Messages.CodeResponse.newBuilder().setRc(2).build();
+                    responseObserver.onNext(response);
+                    responseObserver.onCompleted();
+                    return;
+                }
+
+                // From this point on, the course and student ID are valid.
+
+                int addCode = addCodeCounter.getAndIncrement();
+
+                // Send a CodeResponse to the client.
+                var response = Messages.CodeResponse.newBuilder().setRc(0)
+                        .setAddcode(addCode).build();
+                responseObserver.onNext(response);
+                responseObserver.onCompleted();
+
+                // Add the future student to draftStudentList.
+                draftStudentList.put(Messages.RegisterRequest.newBuilder().setAddCode(addCode)
+                        .setSsid(SSID).setName("").build(), course);
+            }
+
+            @Override
+            public void register(RegisterRequest request, StreamObserver<RegisterResponse> responseObserver)
+            {
+                // Find the student using the SSID in draftStudentList.
+                for (Map.Entry<RegisterRequest, String> entry : draftStudentList.entrySet())
+                {
+                    // Assume the SSID from "request" parameter matches at least one SSID in draftStudentList.
+                    if (request.getSsid() == entry.getKey().getSsid())
+                    {
+                        // Check if the add code from the "request" parameter
+
+                        // If the add code from the "request" parameter doesn't match up with what was stored, error.
+                        if (request.getAddCode() != entry.getKey().getAddCode())
+                        {
+
+                        }
+                    }
+                }
+            }
+
+            @Override
+            public void list(ListRequest request, StreamObserver<ListResponse> responseObserver)
+            {
+                super.list(request, responseObserver);
+            }
+        }
+
         class AddExampleImpl extends AddExampleGrpc.AddExampleImplBase {
             int total = 0;
             @Override
@@ -149,11 +230,14 @@ public class Main
             }
         }
 
-        try {
+        try
+        {
             var server = ServerBuilder.forPort(port).addService(new AddExampleImpl()).build();
             server.start();
             server.awaitTermination();
-        } catch (IOException e) {
+        }
+        catch (IOException e)
+        {
             System.out.println("couldn't serve on " + port);
         }
     }
