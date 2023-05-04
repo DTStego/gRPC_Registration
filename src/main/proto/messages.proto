@@ -4,7 +4,7 @@ option java_package = "edu.sjsu.cs158a.hello";
 package hello;
 
 service AddExample {
-  rpc add(AddExampleRequest) returns (AddExampleResponse);
+    rpc add(AddExampleRequest) returns (AddExampleResponse);
 }
 
 message AddExampleRequest {
@@ -34,7 +34,7 @@ message CodeResponse {
     // 1 = invalid course
     // 2 = invalid id
     int32 rc = 1;
-    // a random code that is used to register for the class
+    // a code that is used to register for the class. implemented using a counter starting at 1
     int32 addcode = 2;
 }
 

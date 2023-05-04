@@ -1,5 +1,6 @@
 package edu.sjsu.cs158a.hello;
 
+import com.google.protobuf.ExtensionLite;
 import edu.sjsu.cs158a.hello.HelloGrpc.HelloImplBase;
 import edu.sjsu.cs158a.hello.Messages.CodeRequest;
 import edu.sjsu.cs158a.hello.Messages.CodeResponse;
@@ -26,31 +27,39 @@ import java.util.List;
 @Command
 public class Main {
     @Command
-    int add(@Parameters(paramLabel = "hostPort") String hostPort,
-            @Parameters(paramLabel = "a") int a,
-            @Parameters(paramLabel = "b") int b) {
-        try {
+    void register(@Parameters(paramLabel = "hostPort") String hostPort,
+                  @Parameters(paramLabel = "className") String courseName,
+                  @Parameters(paramLabel = "studentID") int SSID,
+                  @Parameters(paramLabel = "studentName") String name)
+    {
+        /* Request a code using requestCode(String course, int studentID)
+         * Code Response -
+         *    RC: 0 = add code received, 1 = Invalid course, 2 = Invalid ID
+         *    Add Code: int
+         *
+         * Use register(int addCode, int studentID, String name)
+         * Registration response
+         *    RC: 0 = Success, 1 = Invalid Code, 2 = Code does not match ID
+         */
+
+        try
+        {
             ManagedChannel channel = ManagedChannelBuilder.forTarget(hostPort).usePlaintext().build();
+            var stub = HelloGrpc.newBlockingStub(channel);
+            var response = stub.requestCode(Messages.CodeRequest.newBuilder().setCourse(courseName)
+                    .setSsid(SSID).build());
 
-            // Represents a remote object.
-            var stub = AddExampleGrpc.newBlockingStub(channel);
-
-            // Actual agreed upon object.
-            var request = Messages.AddExampleRequest.newBuilder().setA(a).setB(b).build();
-
-            // Add the agreed information to the stub.
-            var rsp = stub.add(request);
-            System.out.println(rsp.getResult());
-        } catch (StatusRuntimeException e) {
+        }
+        catch (StatusRuntimeException e)
+        {
+            e.printStackTrace();
             System.out.println("problem communicating with " + hostPort);
         }
-        return 0;
     }
 
     @Command
-    int server(@Parameters(paramLabel = "port") int port) throws InterruptedException {
+    void server(@Parameters(paramLabel = "port") int port) throws InterruptedException {
         class AddExampleImpl extends AddExampleGrpc.AddExampleImplBase {
-
             int total = 0;
             @Override
             public void add(Messages.AddExampleRequest request,
@@ -58,18 +67,25 @@ public class Main {
                 var a = request.getA();
                 var b = request.getB();
                 var sum = a + b;
-                
-                synchronized (this)
-                {
+                int myTotal;
+                synchronized (this) {
                     total += sum;
+                    myTotal = total;
                 }
+                try {
+                    Thread.sleep(5000);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+
                 var response = Messages.AddExampleResponse.newBuilder()
-                        .setResult(MessageFormat.format("{0} + {1} = {2} total {3}", a, b, sum, total))
+                        .setResult(MessageFormat.format("{0} + {1} = {2} total {3}", a, b, sum, myTotal))
                         .build();
                 responseObserver.onNext(response);
                 responseObserver.onCompleted();
             }
         }
+
         try {
             var server = ServerBuilder.forPort(port).addService(new AddExampleImpl()).build();
             server.start();
@@ -77,9 +93,9 @@ public class Main {
         } catch (IOException e) {
             System.out.println("couldn't serve on " + port);
         }
-        return 0;
     }
-    public static void main(String[] args) {
+    public static void main(String[] args)
+    {
         System.exit(new CommandLine(new Main()).execute(args));
     }
 }
