@@ -44,15 +44,47 @@ public class Main {
 
         try
         {
+            // Requesting AddCode Section
             ManagedChannel channel = ManagedChannelBuilder.forTarget(hostPort).usePlaintext().build();
             var stub = HelloGrpc.newBlockingStub(channel);
-            var response = stub.requestCode(Messages.CodeRequest.newBuilder().setCourse(courseName)
+
+            var codeResponse = stub.requestCode(Messages.CodeRequest.newBuilder().setCourse(courseName)
                     .setSsid(SSID).build());
 
+            // Get the rc from CodeResponse.
+            int addCodeStatus = codeResponse.getRc();
+
+            // Only proceed if the RC is 0, otherwise, print an error message.
+            if (addCodeStatus != 0)
+            {
+                System.out.println("problem getting add code: " + addCodeStatus);
+                return;
+            }
+
+            int addCode = codeResponse.getAddcode();
+
+            // Registration Section
+            var registrationResponse = stub.register(Messages.RegisterRequest.newBuilder()
+                    .setAddCode(addCode)
+                    .setSsid(SSID)
+                    .setName(name).build());
+
+            int registrationResponseStatus = registrationResponse.getRc();
+
+            if (registrationResponseStatus == 0)
+            {
+                System.out.println("registration successful");
+            }
+            else
+            {
+                System.out.println("problem registering: " + registrationResponseStatus);
+            }
+
+            // OPTIONAL
+            // channel.shutdown();
         }
         catch (StatusRuntimeException e)
         {
-            e.printStackTrace();
             System.out.println("problem communicating with " + hostPort);
         }
     }
