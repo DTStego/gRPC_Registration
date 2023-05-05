@@ -143,7 +143,7 @@ public class Main
                 String course = request.getCourse();
                 int SSID = request.getSsid();
 
-                // Check if course is not valid.
+                // Check if the course is not valid.
                 if (!course.equalsIgnoreCase("CS158A") && !course.equalsIgnoreCase("CS158B"))
                 {
                     var response = Messages.CodeResponse.newBuilder().setRc(1).build();
@@ -179,52 +179,65 @@ public class Main
             @Override
             public void register(RegisterRequest request, StreamObserver<RegisterResponse> responseObserver)
             {
+                // Make sure the client did not send a random, made-up add code that never existed.
+                boolean addCodeFound = false;
+
+                for (RegisterRequest student : draftStudentList.keySet())
+                {
+                    if (student.getAddCode() == request.getAddCode())
+                    {
+                        addCodeFound = true;
+                        break;
+                    }
+                }
+
+                if (!addCodeFound)
+                {
+                    var response = Messages.RegisterResponse.newBuilder().setRc(1).build();
+                    responseObserver.onNext(response);
+                    responseObserver.onCompleted();
+                    return;
+                }
+
                 // Find the student using the SSID in draftStudentList.
                 for (Map.Entry<RegisterRequest, String> entry : draftStudentList.entrySet())
                 {
                     // Assume the SSID from "request" parameter matches at least one SSID in draftStudentList.
                     if (request.getSsid() == entry.getKey().getSsid())
                     {
-                        // Check if the add code from the "request" parameter
-
                         // If the add code from the "request" parameter doesn't match up with what was stored, error.
                         if (request.getAddCode() != entry.getKey().getAddCode())
                         {
-
+                            var response = Messages.RegisterResponse.newBuilder().setRc(2).build();
+                            responseObserver.onNext(response);
+                            responseObserver.onCompleted();
+                            return;
                         }
                     }
                 }
+
+                var response = Messages.RegisterResponse.newBuilder().setRc(0).build();
+                responseObserver.onNext(response);
+                responseObserver.onCompleted();
+
+                registeredStudentList.put(request.getSsid(), request);
             }
 
             @Override
             public void list(ListRequest request, StreamObserver<ListResponse> responseObserver)
             {
-                super.list(request, responseObserver);
-            }
-        }
+                String course = request.getCourse();
 
-        class AddExampleImpl extends AddExampleGrpc.AddExampleImplBase {
-            int total = 0;
-            @Override
-            public void add(Messages.AddExampleRequest request,
-                            StreamObserver<Messages.AddExampleResponse> responseObserver) {
-                var a = request.getA();
-                var b = request.getB();
-                var sum = a + b;
-                int myTotal;
-                synchronized (this) {
-                    total += sum;
-                    myTotal = total;
-                }
-                try {
-                    Thread.sleep(5000);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
+                if (!course.equalsIgnoreCase("CS158A") && !course.equalsIgnoreCase("CS158B"))
+                {
+                    var response = Messages.ListResponse.newBuilder().setRc(1).build();
+                    responseObserver.onNext(response);
+                    responseObserver.onCompleted();
+                    return;
                 }
 
-                var response = Messages.AddExampleResponse.newBuilder()
-                        .setResult(MessageFormat.format("{0} + {1} = {2} total {3}", a, b, sum, myTotal))
-                        .build();
+                var response = Messages.ListResponse.newBuilder().setRc(0)
+                        .addAllRegisterations(registeredStudentList.values()).build();
                 responseObserver.onNext(response);
                 responseObserver.onCompleted();
             }
@@ -232,7 +245,7 @@ public class Main
 
         try
         {
-            var server = ServerBuilder.forPort(port).addService(new AddExampleImpl()).build();
+            var server = ServerBuilder.forPort(port).addService(new HelloImpl()).build();
             server.start();
             server.awaitTermination();
         }
