@@ -20,6 +20,7 @@ import picocli.CommandLine.Parameters;
 import java.io.IOException;
 import java.text.MessageFormat;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @Command
@@ -45,9 +46,9 @@ public class Main
             // Requesting AddCode Section
             ManagedChannel channel = ManagedChannelBuilder.forTarget(hostPort).usePlaintext().build();
             var stub = HelloGrpc.newBlockingStub(channel);
-
-            var codeResponse = stub.requestCode(Messages.CodeRequest.newBuilder().setCourse(courseName)
-                    .setSsid(SSID).build());
+            var codeRequest = Messages.CodeRequest.newBuilder().setCourse(courseName)
+                    .setSsid(SSID).build();
+            var codeResponse = stub.requestCode(codeRequest);
 
             // Get the rc from CodeResponse.
             int addCodeStatus = codeResponse.getRc();
@@ -62,10 +63,11 @@ public class Main
             int addCode = codeResponse.getAddcode();
 
             // Registration Section
-            var registrationResponse = stub.register(Messages.RegisterRequest.newBuilder()
+            var registrationRequest = Messages.RegisterRequest.newBuilder()
                     .setAddCode(addCode)
                     .setSsid(SSID)
-                    .setName(name).build());
+                    .setName(name).build();
+            var registrationResponse = stub.register(registrationRequest);
 
             int registrationResponseStatus = registrationResponse.getRc();
 
@@ -77,9 +79,6 @@ public class Main
             {
                 System.out.println("problem registering: " + registrationResponseStatus);
             }
-
-            // OPTIONAL
-            // channel.shutdown();
         }
         catch (StatusRuntimeException e)
         {
@@ -107,7 +106,15 @@ public class Main
 
             // Request the list and sort it by ascending order based on the studentID.
             var listResponse = stub.list(Messages.ListRequest.newBuilder().setCourse(courseName).build());
-            List<RegisterRequest> studentList = listResponse.getRegisterationsList();
+
+            // If the course that was requested wasn't CS158A/CS158B, display the error (listResponse rc = 1).
+            if (listResponse.getRc() == 1)
+            {
+                System.out.println("problem listing students: " + listResponse.getRc());
+                return;
+            }
+
+            ArrayList<RegisterRequest> studentList = new ArrayList<>(listResponse.getRegisterationsList());
             studentList.sort(Comparator.comparingInt(RegisterRequest::getSsid));
 
             for (RegisterRequest student : studentList)
@@ -128,14 +135,14 @@ public class Main
         {
             // Ties a student (in the form of a RegisterRequest) with a course (String).
             // List of students that have requested an addCode but haven't been registered.
-            HashMap<RegisterRequest, String> draftStudentList = new HashMap<>();
+            ConcurrentHashMap<RegisterRequest, String> draftStudentList = new ConcurrentHashMap<>();
             // Atomic because no student can have the same addCode.
             AtomicInteger addCodeCounter = new AtomicInteger(1);
 
             // List of successfully registered students (in the form of a RegisterRequest).
             // <SSID, Student> format. Cannot have multiple entries with the same SSID key.
             // A student cannot concurrently enroll in both CS158A & CS158B.
-            HashMap<Integer, RegisterRequest> registeredStudentList = new HashMap<>();
+            ConcurrentHashMap<Integer, RegisterRequest> registeredStudentList = new ConcurrentHashMap<>();
 
             @Override
             public void requestCode(CodeRequest request, StreamObserver<CodeResponse> responseObserver)
@@ -163,17 +170,33 @@ public class Main
 
                 // From this point on, the course and student ID are valid.
 
+                // Used to avoid a ConcurrentModificationException.
+                RegisterRequest temporaryStudent = null;
+
+                // Check to see if this is an overwrite of a record. If so, delete it from draftStudentList.
+                for (RegisterRequest student : draftStudentList.keySet())
+                {
+                    // Indicates an overwrite.
+                    if (request.getSsid() == student.getSsid())
+                    {
+                        temporaryStudent = student;
+                    }
+                }
+
+                if (temporaryStudent != null)
+                    draftStudentList.remove(temporaryStudent);
+
                 int addCode = addCodeCounter.getAndIncrement();
+
+                // Add the future student to draftStudentList.
+                draftStudentList.put(Messages.RegisterRequest.newBuilder().setAddCode(addCode)
+                        .setSsid(SSID).setName("").build(), course);
 
                 // Send a CodeResponse to the client.
                 var response = Messages.CodeResponse.newBuilder().setRc(0)
                         .setAddcode(addCode).build();
                 responseObserver.onNext(response);
                 responseObserver.onCompleted();
-
-                // Add the future student to draftStudentList.
-                draftStudentList.put(Messages.RegisterRequest.newBuilder().setAddCode(addCode)
-                        .setSsid(SSID).setName("").build(), course);
             }
 
             @Override
