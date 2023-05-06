@@ -153,15 +153,15 @@ public class Main
         {
             // Ties a student (in the form of a RegisterRequest) with a course (String).
             // List of students that have requested an addCode but haven't been registered.
-            ConcurrentHashMap<RegisterRequest, String> draftStudentList = new ConcurrentHashMap<>();
+            final ConcurrentHashMap<RegisterRequest, String> draftStudentList = new ConcurrentHashMap<>();
 
             // Atomic [For synchronization] because no student can have the same addCode.
-            AtomicInteger addCodeCounter = new AtomicInteger(1);
+            final AtomicInteger addCodeCounter = new AtomicInteger(1);
 
             // List of successfully registered students (in the form of a RegisterRequest).
             // <SSID, Student> format. Cannot have multiple RegisterRequest values with the same SSID key.
             // A student cannot concurrently enroll in both CS158A & CS158B.
-            ConcurrentHashMap<Integer, RegisterRequest> registeredStudentList = new ConcurrentHashMap<>();
+            final ConcurrentHashMap<Integer, RegisterRequest> registeredStudentList = new ConcurrentHashMap<>();
 
             /**
              * Remote Procedure Call from a client which supplies a CodeRequest.
